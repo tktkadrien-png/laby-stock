@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { getAllProducts } from '@/lib/database/localStorage';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -26,8 +27,10 @@ export default function CategoriesPage() {
 
     if (editingId) {
       updateCategory(editingId, formData);
+      alert('✅ Catégorie mise à jour avec succès!');
     } else {
       addCategory(formData);
+      alert('✅ Catégorie ajoutée avec succès!');
     }
 
     resetForm();
@@ -44,9 +47,18 @@ export default function CategoriesPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')) {
+  const handleDelete = (id: string, nom: string) => {
+    const products = getAllProducts();
+    const categoryProducts = products.filter(p => p.categorie === nom);
+
+    if (categoryProducts.length > 0) {
+      alert(`⚠️ Impossible de supprimer cette catégorie!\n\n${categoryProducts.length} produit(s) utilisent encore cette catégorie.`);
+      return;
+    }
+
+    if (confirm(`⚠️ Supprimer la catégorie "${nom}"?\n\nCette action est irréversible.`)) {
       deleteCategory(id);
+      alert('✅ Catégorie supprimée avec succès!');
     }
   };
 
@@ -61,8 +73,15 @@ export default function CategoriesPage() {
     });
   };
 
+  // Calculate product counts per category
+  const getProductCount = (categoryName: string) => {
+    const products = getAllProducts();
+    return products.filter(p => p.categorie === categoryName).length;
+  };
+
   const totalCategories = categories.length;
-  const totalProduits = 0; // TODO: Calculate from products when integrated
+  const totalProduits = getAllProducts().length;
+  const averagePerCategory = totalCategories > 0 ? Math.round(totalProduits / totalCategories) : 0;
 
   const couleurs = [
     { value: '#EF4444', nom: 'Rouge' },
@@ -80,8 +99,10 @@ export default function CategoriesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestion des Catégories</h1>
-          <p className="text-sm text-gray-600 mt-1">{totalCategories} catégories · {totalProduits} produits</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Catégories</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {totalCategories} catégorie{totalCategories > 1 ? 's' : ''} · {totalProduits} produit{totalProduits > 1 ? 's' : ''}
+          </p>
         </div>
         <Button variant="primary" size="lg" onClick={() => setShowModal(true)}>
           <Plus size={20} />
@@ -94,172 +115,182 @@ export default function CategoriesPage() {
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Catégories</p>
-              <p className="text-2xl font-bold text-gray-900">{totalCategories}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Total Catégories</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalCategories}</p>
             </div>
-            <Layers size={32} className="text-blue-800" />
+            <Layers size={32} className="text-blue-600" />
           </div>
         </Card>
 
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Produits Associés</p>
-              <p className="text-2xl font-bold text-blue-800">{totalProduits}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Produits Associés</p>
+              <p className="text-2xl font-bold text-blue-600">{totalProduits}</p>
             </div>
-            <Package size={32} className="text-blue-800" />
+            <Package size={32} className="text-blue-600" />
           </div>
         </Card>
 
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Moyenne par Catégorie</p>
-              <p className="text-2xl font-bold text-amber-600">
-                {Math.round(totalProduits / totalCategories)}
-              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Moyenne par Catégorie</p>
+              <p className="text-2xl font-bold text-amber-600">{averagePerCategory}</p>
             </div>
-            <div className="text-amber-500 text-2xl">📊</div>
+            <div className="text-4xl">📊</div>
           </div>
         </Card>
       </div>
 
       {/* Categories Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((category) => (
-          <Card key={category.id} variant="bordered">
-            <div className="flex items-start justify-between mb-3">
-              <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: category.couleur + '20' }}
-              >
-                <Layers size={24} style={{ color: category.couleur }} />
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleEdit(category)}
-                  className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+        {categories.map((category) => {
+          const productCount = getProductCount(category.nom);
+          return (
+            <Card key={category.id} variant="bordered">
+              <div className="flex items-start justify-between mb-3">
+                <div
+                  className="w-12 h-12 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: category.couleur + '20' }}
                 >
-                  <Edit size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete(category.id)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                  <Layers size={24} style={{ color: category.couleur }} />
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEdit(category)}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                    title="Modifier"
+                  >
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(category.id, category.nom)}
+                    className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                    title="Supprimer"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{category.nom}</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{category.description}</p>
+
+              <div className="flex items-center justify-between">
+                <Badge
+                  variant="default"
+                  style={{
+                    backgroundColor: category.couleur + '20',
+                    color: category.couleur,
+                    borderColor: category.couleur,
+                  }}
                 >
-                  <Trash2 size={16} />
-                </button>
+                  {category.code}
+                </Badge>
+                <div className="text-sm">
+                  <span className="font-bold text-blue-600">{productCount}</span>
+                  <span className="text-gray-500 dark:text-gray-400 ml-1">produit{productCount > 1 ? 's' : ''}</span>
+                </div>
               </div>
-            </div>
-
-            <h3 className="text-lg font-bold text-gray-900 mb-1">{category.nom}</h3>
-            <p className="text-sm text-gray-600 mb-3">{category.description}</p>
-
-            <div className="flex items-center justify-between">
-              <Badge
-                variant="default"
-                style={{
-                  backgroundColor: category.couleur + '20',
-                  color: category.couleur,
-                  borderColor: category.couleur,
-                }}
-              >
-                {category.code}
-              </Badge>
-              <div className="text-sm">
-                <span className="font-bold text-blue-800">0</span>
-                <span className="text-gray-500 ml-1">produits</span>
-              </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
 
       {/* Table View */}
       <Card>
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Liste Détaillée</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Catégorie</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Couleur</TableHead>
-              <TableHead>Produits</TableHead>
-              <TableHead>Date Création</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {categories.map((category) => (
-              <TableRow key={category.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-8 h-8 rounded flex items-center justify-center"
-                      style={{ backgroundColor: category.couleur + '20' }}
-                    >
-                      <Layers size={16} style={{ color: category.couleur }} />
-                    </div>
-                    <span className="font-semibold">{category.nom}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="default"
-                    style={{
-                      backgroundColor: category.couleur + '20',
-                      color: category.couleur,
-                    }}
-                  >
-                    {category.code}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-gray-600 max-w-xs truncate">
-                  {category.description}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-6 h-6 rounded border-2 border-gray-300"
-                      style={{ backgroundColor: category.couleur }}
-                    />
-                    <span className="text-xs text-gray-500">{category.couleur}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="font-bold text-blue-800">0</span>
-                </TableCell>
-                <TableCell className="text-sm text-gray-600">
-                  {new Date(category.created_at).toLocaleDateString('fr-FR')}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleEdit(category)}
-                      className="p-1 text-green-600 hover:bg-green-50 rounded"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(category.id)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </TableCell>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Liste Détaillée</h3>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Catégorie</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Couleur</TableHead>
+                <TableHead>Produits</TableHead>
+                <TableHead>Date Création</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {categories.map((category) => {
+                const productCount = getProductCount(category.nom);
+                return (
+                  <TableRow key={category.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded flex items-center justify-center"
+                          style={{ backgroundColor: category.couleur + '20' }}
+                        >
+                          <Layers size={16} style={{ color: category.couleur }} />
+                        </div>
+                        <span className="font-semibold dark:text-white">{category.nom}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="default"
+                        style={{
+                          backgroundColor: category.couleur + '20',
+                          color: category.couleur,
+                        }}
+                      >
+                        {category.code}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-gray-600 dark:text-gray-400 max-w-xs truncate">
+                      {category.description}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-6 h-6 rounded border-2 border-gray-300 dark:border-gray-600"
+                          style={{ backgroundColor: category.couleur }}
+                        />
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{category.couleur}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-bold text-blue-600">{productCount}</span>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                      {new Date(category.created_at).toLocaleDateString('fr-FR')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEdit(category)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                          title="Modifier"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(category.id, category.nom)}
+                          className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                          title="Supprimer"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
 
       {/* Add/Edit Modal */}
       <Modal
         isOpen={showModal}
         onClose={resetForm}
-        title={editingId ? 'Modifier la Catégorie' : 'Nouvelle Catégorie'}
-        size="md"
+        title={editingId ? '✏️ Modifier la Catégorie' : '➕ Nouvelle Catégorie'}
+        size="medium"
       >
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
@@ -283,21 +314,21 @@ export default function CategoriesPage() {
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Description
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
                 placeholder="Description de la catégorie..."
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Couleur
               </label>
               <div className="grid grid-cols-4 gap-2">
@@ -309,14 +340,14 @@ export default function CategoriesPage() {
                     className={`p-3 rounded-lg border-2 transition-all ${
                       formData.couleur === couleur.value
                         ? 'border-blue-800 ring-2 ring-blue-300'
-                        : 'border-gray-200 hover:border-gray-300'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                     }`}
                   >
                     <div
                       className="w-full h-8 rounded"
                       style={{ backgroundColor: couleur.value }}
                     />
-                    <p className="text-xs text-gray-600 mt-1 text-center">{couleur.nom}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 text-center">{couleur.nom}</p>
                   </button>
                 ))}
               </div>
@@ -328,7 +359,7 @@ export default function CategoriesPage() {
               Annuler
             </Button>
             <Button type="submit" variant="primary">
-              {editingId ? 'Mettre à jour' : 'Créer'}
+              {editingId ? '✅ Mettre à jour' : '✅ Créer'}
             </Button>
           </div>
         </form>
