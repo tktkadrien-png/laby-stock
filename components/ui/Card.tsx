@@ -6,11 +6,11 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ className = '', variant = 'default', children, ...props }, ref) => {
-    const baseStyles = 'bg-white rounded-lg shadow-sm';
+    const baseStyles = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm transition-colors';
 
     const variants = {
       default: 'p-6',
-      bordered: 'p-6 border border-gray-200',
+      bordered: 'p-6 border border-gray-200 dark:border-gray-700',
     };
 
     return (

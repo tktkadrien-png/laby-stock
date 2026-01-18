@@ -3,13 +3,14 @@
 import { Bell, User } from 'lucide-react';
 import { useAlerts } from '@/contexts/AlertContext';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import { useRouter } from 'next/navigation';
 
 export default function Header() {
-  const { unreadCount, setShowAlertPopup, playNotificationSound } = useAlerts();
+  const { unreadCount } = useAlerts();
+  const router = useRouter();
 
   const handleBellClick = () => {
-    playNotificationSound();
-    setShowAlertPopup(true);
+    router.push('/notifications');
   };
 
   return (

@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   Layers,
-  Tag
+  Tag,
+  Bell
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Catégories', href: '/categories', icon: Layers },
   { name: 'Types', href: '/types', icon: Tag },
   { name: 'Fournisseurs', href: '/fournisseurs', icon: Users },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
   { name: 'Rapports', href: '/rapports', icon: FileText },
   { name: 'Paramètres', href: '/parametres', icon: Settings },
 ];

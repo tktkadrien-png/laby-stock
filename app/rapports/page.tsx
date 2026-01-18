@@ -1,13 +1,74 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, Package } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, Package, Calendar, FileSpreadsheet } from 'lucide-react';
+
+interface Product {
+  id: string;
+  nom: string;
+  quantite_totale: number;
+  prix_unitaire: number;
+  unite: string;
+  categorie: string;
+  fournisseur: string;
+  date_peremption?: string;
+}
+
+interface Transaction {
+  id: string;
+  produit_id: string;
+  produit_nom: string;
+  quantite: number;
+  type: 'entree' | 'sortie';
+  date: string;
+  prix_unitaire?: number;
+}
 
 export default function RapportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [entrees, setEntrees] = useState<Transaction[]>([]);
+  const [sorties, setSorties] = useState<Transaction[]>([]);
+
+  // Load data from localStorage
+  useEffect(() => {
+    const storedProducts = localStorage.getItem('labystockpro-products');
+    const storedEntrees = localStorage.getItem('labystockpro-entrees');
+    const storedSorties = localStorage.getItem('labystockpro-sorties');
+
+    if (storedProducts) setProducts(JSON.parse(storedProducts));
+    if (storedEntrees) setEntrees(JSON.parse(storedEntrees));
+    if (storedSorties) setSorties(JSON.parse(storedSorties));
+  }, []);
+
+  // Filter transactions by period
+  const filterByPeriod = (date: string) => {
+    const transactionDate = new Date(date);
+    const now = new Date();
+
+    switch (selectedPeriod) {
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return transactionDate >= weekAgo;
+      case 'month':
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return transactionDate >= monthAgo;
+      case 'quarter':
+        const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        return transactionDate >= quarterAgo;
+      case 'year':
+        const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        return transactionDate >= yearAgo;
+      default:
+        return true;
+    }
+  };
+
+  const filteredEntrees = entrees.filter(e => filterByPeriod(e.date));
+  const filteredSorties = sorties.filter(s => filterByPeriod(s.date));
 
   const formatPrice = (price: number): string => {
     return new Intl.NumberFormat('fr-FR', {
@@ -16,43 +77,221 @@ export default function RapportsPage() {
     }).format(price) + ' FCFA';
   };
 
-  // Mock data for reports
+  // Calculate statistics
   const rapportData = {
     entrees: {
-      total: 1350,
-      valeur: 2345000,
-      count: 3,
+      total: filteredEntrees.reduce((sum, e) => sum + e.quantite, 0),
+      valeur: filteredEntrees.reduce((sum, e) => sum + (e.quantite * (e.prix_unitaire || 0)), 0),
+      count: filteredEntrees.length,
     },
     sorties: {
-      total: 50,
-      valeur: 229250,
-      count: 3,
+      total: filteredSorties.reduce((sum, s) => sum + s.quantite, 0),
+      valeur: filteredSorties.reduce((sum, s) => {
+        const product = products.find(p => p.id === s.produit_id);
+        return sum + (s.quantite * (product?.prix_unitaire || 0));
+      }, 0),
+      count: filteredSorties.length,
     },
     stock: {
-      valeur_totale: 3890750,
-      produits_actifs: 5,
-      alertes: 1,
+      valeur_totale: products.reduce((sum, p) => sum + (p.quantite_totale * p.prix_unitaire), 0),
+      produits_actifs: products.length,
+      alertes: products.filter(p => p.quantite_totale <= 10).length,
     },
   };
 
-  const topProduits = [
-    { nom: 'Tubes EDTA', quantite_utilisee: 25, valeur: 1250 },
-    { nom: 'Gants Nitrile M', quantite_utilisee: 20, valeur: 3000 },
-    { nom: 'Réactif PCR Kit', quantite_utilisee: 5, valeur: 225000 },
-  ];
+  // Top products by usage
+  const topProduits = [...sorties]
+    .filter(s => filterByPeriod(s.date))
+    .reduce((acc: { [key: string]: { nom: string; quantite: number; valeur: number } }, s) => {
+      const product = products.find(p => p.id === s.produit_id);
+      if (!acc[s.produit_id]) {
+        acc[s.produit_id] = { nom: s.produit_nom, quantite: 0, valeur: 0 };
+      }
+      acc[s.produit_id].quantite += s.quantite;
+      acc[s.produit_id].valeur += s.quantite * (product?.prix_unitaire || 0);
+      return acc;
+    }, {});
 
-  const fournisseurs = [
-    { nom: 'BioLab Pro', produits: 2, valeur: 2475000 },
-    { nom: 'MedSupply', produits: 2, valeur: 87500 },
-    { nom: 'SafetyFirst', produits: 1, valeur: 42000 },
-  ];
+  const topProduitsArray = Object.values(topProduits)
+    .sort((a, b) => b.quantite - a.quantite)
+    .slice(0, 5);
 
-  const handleExportPDF = () => {
-    alert('Export PDF en cours de développement...');
+  // Export to Excel (CSV format)
+  const handleExportExcel = () => {
+    // Create CSV content
+    let csvContent = "data:text/csv;charset=utf-8,";
+
+    // Add report header
+    csvContent += "RAPPORT DE STOCK - LABY STOCK\n";
+    csvContent += `Période: ${getPeriodLabel()}\n`;
+    csvContent += `Date de génération: ${new Date().toLocaleDateString('fr-FR')}\n\n`;
+
+    // Summary section
+    csvContent += "=== RÉSUMÉ ===\n";
+    csvContent += `Entrées totales,${rapportData.entrees.total}\n`;
+    csvContent += `Valeur entrées,${rapportData.entrees.valeur} FCFA\n`;
+    csvContent += `Sorties totales,${rapportData.sorties.total}\n`;
+    csvContent += `Valeur sorties,${rapportData.sorties.valeur} FCFA\n`;
+    csvContent += `Valeur stock actuel,${rapportData.stock.valeur_totale} FCFA\n`;
+    csvContent += `Produits actifs,${rapportData.stock.produits_actifs}\n\n`;
+
+    // Products section
+    csvContent += "=== LISTE DES PRODUITS ===\n";
+    csvContent += "Nom,Catégorie,Quantité,Unité,Prix Unitaire,Valeur Totale,Fournisseur\n";
+    products.forEach(p => {
+      csvContent += `"${p.nom}","${p.categorie}",${p.quantite_totale},"${p.unite}",${p.prix_unitaire},${p.quantite_totale * p.prix_unitaire},"${p.fournisseur}"\n`;
+    });
+
+    csvContent += "\n=== ENTRÉES ===\n";
+    csvContent += "Produit,Quantité,Date,Prix Unitaire\n";
+    filteredEntrees.forEach(e => {
+      csvContent += `"${e.produit_nom}",${e.quantite},"${new Date(e.date).toLocaleDateString('fr-FR')}",${e.prix_unitaire || 0}\n`;
+    });
+
+    csvContent += "\n=== SORTIES ===\n";
+    csvContent += "Produit,Quantité,Date\n";
+    filteredSorties.forEach(s => {
+      csvContent += `"${s.produit_nom}",${s.quantite},"${new Date(s.date).toLocaleDateString('fr-FR')}"\n`;
+    });
+
+    // Download file
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `rapport-stock-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const handleExportExcel = () => {
-    alert('Export Excel en cours de développement...');
+  // Export to PDF (HTML print)
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Rapport Stock - LABY STOCK</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+          h1 { color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 10px; }
+          h2 { color: #1e40af; margin-top: 30px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 20px 0; }
+          .stat-card { background: #f3f4f6; padding: 15px; border-radius: 8px; }
+          .stat-value { font-size: 24px; font-weight: bold; color: #1e40af; }
+          .stat-label { font-size: 14px; color: #666; }
+          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background: #1e40af; color: white; }
+          tr:nth-child(even) { background: #f9fafb; }
+          .text-green { color: #16a34a; }
+          .text-red { color: #dc2626; }
+          .text-amber { color: #d97706; }
+          .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; }
+          @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>LABY STOCK - Rapport de Stock</h1>
+          <p>Période: ${getPeriodLabel()}</p>
+          <p>Généré le: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}</p>
+        </div>
+
+        <h2>Résumé</h2>
+        <div class="summary">
+          <div class="stat-card">
+            <div class="stat-label">Entrées Totales</div>
+            <div class="stat-value text-green">+${rapportData.entrees.total}</div>
+            <div class="stat-label">${formatPrice(rapportData.entrees.valeur)}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Sorties Totales</div>
+            <div class="stat-value text-red">-${rapportData.sorties.total}</div>
+            <div class="stat-label">${formatPrice(rapportData.sorties.valeur)}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Valeur Stock</div>
+            <div class="stat-value text-amber">${formatPrice(rapportData.stock.valeur_totale)}</div>
+            <div class="stat-label">${rapportData.stock.produits_actifs} produits</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Solde Net</div>
+            <div class="stat-value">${formatPrice(rapportData.entrees.valeur - rapportData.sorties.valeur)}</div>
+          </div>
+        </div>
+
+        <h2>Inventaire Actuel</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Produit</th>
+              <th>Catégorie</th>
+              <th>Quantité</th>
+              <th>Prix Unit.</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${products.map(p => `
+              <tr>
+                <td>${p.nom}</td>
+                <td>${p.categorie}</td>
+                <td>${p.quantite_totale} ${p.unite}</td>
+                <td>${formatPrice(p.prix_unitaire)}</td>
+                <td>${formatPrice(p.quantite_totale * p.prix_unitaire)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <h2>Top Produits Utilisés</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Produit</th>
+              <th>Quantité Utilisée</th>
+              <th>Valeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${topProduitsArray.map((p, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${p.nom}</td>
+                <td>${p.quantite}</td>
+                <td>${formatPrice(p.valeur)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} LABY STOCK - Système de Gestion de Stock</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
+  const getPeriodLabel = () => {
+    switch (selectedPeriod) {
+      case 'week': return 'Cette semaine';
+      case 'month': return 'Ce mois';
+      case 'quarter': return 'Ce trimestre';
+      case 'year': return 'Cette année';
+      default: return 'Toutes les périodes';
+    }
   };
 
   return (
@@ -60,12 +299,12 @@ export default function RapportsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Rapports & Analytics</h1>
-          <p className="text-sm text-gray-600 mt-1">Analyse des mouvements de stock</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Rapports & Analytics</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Analyse des mouvements de stock</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={handleExportExcel}>
-            <Download size={20} />
+            <FileSpreadsheet size={20} />
             Export Excel
           </Button>
           <Button variant="primary" onClick={handleExportPDF}>
@@ -77,9 +316,12 @@ export default function RapportsPage() {
 
       {/* Period selector */}
       <Card>
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Période:</span>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-gray-500 dark:text-gray-400" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Période:</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
             {[
               { value: 'week', label: 'Cette semaine' },
               { value: 'month', label: 'Ce mois' },
@@ -91,8 +333,8 @@ export default function RapportsPage() {
                 onClick={() => setSelectedPeriod(period.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   selectedPeriod === period.value
-                    ? 'bg-blue-800 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-800 text-white dark:bg-blue-700'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 {period.label}
@@ -107,44 +349,44 @@ export default function RapportsPage() {
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Entrées Totales</p>
-              <p className="text-2xl font-bold text-green-600">+{rapportData.entrees.total}</p>
-              <p className="text-xs text-gray-500 mt-1">{rapportData.entrees.count} transactions</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Entrées Totales</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">+{rapportData.entrees.total}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{rapportData.entrees.count} transactions</p>
             </div>
-            <TrendingUp size={32} className="text-green-600" />
+            <TrendingUp size={32} className="text-green-600 dark:text-green-400" />
           </div>
         </Card>
 
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Sorties Totales</p>
-              <p className="text-2xl font-bold text-red-600">-{rapportData.sorties.total}</p>
-              <p className="text-xs text-gray-500 mt-1">{rapportData.sorties.count} transactions</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Sorties Totales</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">-{rapportData.sorties.total}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{rapportData.sorties.count} transactions</p>
             </div>
-            <TrendingDown size={32} className="text-red-600" />
+            <TrendingDown size={32} className="text-red-600 dark:text-red-400" />
           </div>
         </Card>
 
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Valeur Stock</p>
-              <p className="text-xl font-bold text-amber-600">{formatPrice(rapportData.stock.valeur_totale)}</p>
-              <p className="text-xs text-gray-500 mt-1">{rapportData.stock.produits_actifs} produits</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Valeur Stock</p>
+              <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatPrice(rapportData.stock.valeur_totale)}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">{rapportData.stock.produits_actifs} produits</p>
             </div>
-            <DollarSign size={32} className="text-amber-600" />
+            <DollarSign size={32} className="text-amber-600 dark:text-amber-400" />
           </div>
         </Card>
 
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Taux de Rotation</p>
-              <p className="text-2xl font-bold text-blue-600">3.7%</p>
-              <p className="text-xs text-gray-500 mt-1">Ce mois</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Alertes Stock</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{rapportData.stock.alertes}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">produits faibles</p>
             </div>
-            <Package size={32} className="text-blue-600" />
+            <Package size={32} className="text-blue-600 dark:text-blue-400" />
           </div>
         </Card>
       </div>
@@ -153,30 +395,30 @@ export default function RapportsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Valeur des Mouvements */}
         <Card>
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Valeur des Mouvements</h3>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Valeur des Mouvements</h3>
           <div className="space-y-4">
-            <div className="p-4 bg-green-50 rounded-lg border-2 border-green-200">
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border-2 border-green-200 dark:border-green-800">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Entrées</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Entrées</span>
                 <Badge variant="success">+{rapportData.entrees.count}</Badge>
               </div>
-              <p className="text-2xl font-bold text-green-700">{formatPrice(rapportData.entrees.valeur)}</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{formatPrice(rapportData.entrees.valeur)}</p>
             </div>
 
-            <div className="p-4 bg-red-50 rounded-lg border-2 border-red-200">
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border-2 border-red-200 dark:border-red-800">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Sorties</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sorties</span>
                 <Badge variant="danger">-{rapportData.sorties.count}</Badge>
               </div>
-              <p className="text-2xl font-bold text-red-700">{formatPrice(rapportData.sorties.valeur)}</p>
+              <p className="text-2xl font-bold text-red-700 dark:text-red-400">{formatPrice(rapportData.sorties.valeur)}</p>
             </div>
 
-            <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-800">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Solde Net</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Solde Net</span>
                 <Badge variant="info">Δ</Badge>
               </div>
-              <p className="text-2xl font-bold text-blue-700">
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
                 {formatPrice(rapportData.entrees.valeur - rapportData.sorties.valeur)}
               </p>
             </div>
@@ -185,73 +427,65 @@ export default function RapportsPage() {
 
         {/* Top Produits Utilisés */}
         <Card>
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Top Produits Utilisés</h3>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Top Produits Utilisés</h3>
           <div className="space-y-3">
-            {topProduits.map((produit, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-800 text-white flex items-center justify-center font-bold text-sm">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{produit.nom}</p>
-                    <p className="text-xs text-gray-500">-{produit.quantite_utilisee} unités</p>
-                  </div>
-                </div>
-                <p className="text-sm font-bold text-amber-700">{formatPrice(produit.valeur)}</p>
+            {topProduitsArray.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Package size={48} className="mx-auto mb-3 opacity-50" />
+                <p>Aucune sortie dans cette période</p>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Analyse par Fournisseur */}
-        <Card>
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Analyse par Fournisseur</h3>
-          <div className="space-y-3">
-            {fournisseurs.map((fournisseur, index) => (
-              <div
-                key={index}
-                className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-semibold text-gray-900">{fournisseur.nom}</p>
-                  <Badge variant="info">{fournisseur.produits} produits</Badge>
+            ) : (
+              topProduitsArray.map((produit, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-800 dark:bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-white">{produit.nom}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">-{produit.quantite} unités</p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{formatPrice(produit.valeur)}</p>
                 </div>
-                <p className="text-lg font-bold text-amber-700">{formatPrice(fournisseur.valeur)}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
         {/* Alertes et Recommandations */}
-        <Card>
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Alertes & Recommandations</h3>
-          <div className="space-y-3">
-            <div className="p-3 bg-red-50 rounded-lg border-l-4 border-red-500">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-red-600 font-bold text-sm">URGENT</span>
-                <Badge variant="danger">1 produit</Badge>
+        <Card className="lg:col-span-2">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Alertes & Recommandations</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {products.filter(p => p.quantite_totale === 0).length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border-l-4 border-red-500">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-red-600 dark:text-red-400 font-bold text-sm">RUPTURE</span>
+                  <Badge variant="danger">{products.filter(p => p.quantite_totale === 0).length} produit(s)</Badge>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-300">Produits en rupture de stock</p>
               </div>
-              <p className="text-sm text-gray-700">Anticorps Anti-HBs expire dans 12 jours</p>
-            </div>
+            )}
 
-            <div className="p-3 bg-amber-50 rounded-lg border-l-4 border-amber-500">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-amber-600 font-bold text-sm">ATTENTION</span>
-                <Badge variant="warning">Rotation faible</Badge>
+            {products.filter(p => p.quantite_totale > 0 && p.quantite_totale <= 10).length > 0 && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border-l-4 border-amber-500">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-600 dark:text-amber-400 font-bold text-sm">ATTENTION</span>
+                  <Badge variant="warning">{products.filter(p => p.quantite_totale > 0 && p.quantite_totale <= 10).length} produit(s)</Badge>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-300">Stock faible, à réapprovisionner</p>
               </div>
-              <p className="text-sm text-gray-700">Certains produits ont un faible taux de rotation</p>
-            </div>
+            )}
 
-            <div className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-green-600 font-bold text-sm">OK</span>
-                <Badge variant="success">Stock sain</Badge>
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border-l-4 border-green-500">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-green-600 dark:text-green-400 font-bold text-sm">OK</span>
+                <Badge variant="success">{products.filter(p => p.quantite_totale > 10).length} produit(s)</Badge>
               </div>
-              <p className="text-sm text-gray-700">Le stock global est en bon état</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300">Stock normal</p>
             </div>
           </div>
         </Card>
@@ -259,24 +493,33 @@ export default function RapportsPage() {
 
       {/* Quick Actions */}
       <Card>
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Actions Rapides</h3>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Actions Rapides</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50 transition-colors text-left">
-            <FileText size={24} className="text-blue-800 mb-2" />
-            <p className="font-semibold text-gray-900">Rapport d'Inventaire</p>
-            <p className="text-xs text-gray-600 mt-1">Générer rapport complet</p>
+          <button
+            onClick={handleExportPDF}
+            className="p-4 border-2 border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-left"
+          >
+            <FileText size={24} className="text-blue-800 dark:text-blue-400 mb-2" />
+            <p className="font-semibold text-gray-900 dark:text-white">Rapport Complet PDF</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Générer et imprimer</p>
           </button>
 
-          <button className="p-4 border-2 border-green-200 rounded-lg hover:bg-green-50 transition-colors text-left">
-            <TrendingUp size={24} className="text-green-600 mb-2" />
-            <p className="font-semibold text-gray-900">Rapport d'Entrées</p>
-            <p className="text-xs text-gray-600 mt-1">Historique des réceptions</p>
+          <button
+            onClick={handleExportExcel}
+            className="p-4 border-2 border-green-200 dark:border-green-800 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors text-left"
+          >
+            <FileSpreadsheet size={24} className="text-green-600 dark:text-green-400 mb-2" />
+            <p className="font-semibold text-gray-900 dark:text-white">Export Excel/CSV</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Télécharger les données</p>
           </button>
 
-          <button className="p-4 border-2 border-red-200 rounded-lg hover:bg-red-50 transition-colors text-left">
-            <TrendingDown size={24} className="text-red-600 mb-2" />
-            <p className="font-semibold text-gray-900">Rapport de Sorties</p>
-            <p className="text-xs text-gray-600 mt-1">Historique des utilisations</p>
+          <button
+            onClick={() => window.print()}
+            className="p-4 border-2 border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors text-left"
+          >
+            <Download size={24} className="text-amber-600 dark:text-amber-400 mb-2" />
+            <p className="font-semibold text-gray-900 dark:text-white">Imprimer Page</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Imprimer cette page</p>
           </button>
         </div>
       </Card>

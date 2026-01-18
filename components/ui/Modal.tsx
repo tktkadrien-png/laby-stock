@@ -41,10 +41,10 @@ export default function Modal({ isOpen, onClose, title, children, size = 'lg' }:
 
       {/* Modal */}
       <div
-        className={`relative bg-white rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden flex flex-col`}
+        className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden flex flex-col`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-blue-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-800 dark:bg-blue-900">
           <h2 className="text-xl font-bold text-white">{title}</h2>
           <button
             onClick={onClose}

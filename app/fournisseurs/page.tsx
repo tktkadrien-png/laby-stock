@@ -492,13 +492,24 @@ export default function FournisseursPage() {
                 required
               />
 
-REPLACE_ME
-REPLACE_ME
-REPLACE_ME
-REPLACE_ME
-REPLACE_ME
-REPLACE_ME
-REPLACE_ME
+<div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Pays *
+                </label>
+                <select
+                  value={formData.pays}
+                  onChange={(e) => setFormData({ ...formData, pays: e.target.value })}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sélectionner un pays</option>
+                  {WORLD_COUNTRIES.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
