@@ -358,33 +358,7 @@ export const getStatistics = () => {
 // ==================== INITIALISATION ====================
 
 export const initializeDatabase = () => {
-  // Vérifier si déjà initialisé
-  const products = getAllProducts();
-  if (products.length > 0) return;
-
-  // Créer des données de démonstration
-  const demoSuppliers: Omit<Supplier, 'id' | 'created_at' | 'updated_at'>[] = [
-    {
-      nom: 'Bio-Lab Supply',
-      contact: 'Jean Dupont',
-      email: 'contact@biolab.cm',
-      telephone: '+237 699 123 456',
-      adresse: 'Boulevard de la Liberté',
-      ville: 'Douala',
-      pays: 'Cameroun',
-    },
-    {
-      nom: 'Scientific Solutions',
-      contact: 'Marie Kamga',
-      email: 'info@scisolutions.cm',
-      telephone: '+237 677 234 567',
-      adresse: 'Avenue Kennedy',
-      ville: 'Yaoundé',
-      pays: 'Cameroun',
-    },
-  ];
-
-  demoSuppliers.forEach(s => createSupplier(s));
-
-  console.log('✅ Base de données initialisée avec des données de démonstration');
+  // Base de données vide - Pas de données de démonstration
+  // L'utilisateur doit créer ses propres données
+  console.log('✅ Base de données prête - Aucune donnée de démonstration');
 };
