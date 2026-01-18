@@ -1,68 +1,52 @@
-# 📦 StockPro - Système de Gestion de Stock Moderne
+# STOCKDELABY
 
-Application web complète de gestion de stock avec Next.js 15 + Supabase
+Système de gestion de stock professionnel pour laboratoires
 
-## 🚀 Installation Rapide
+## Description
 
-### 1. Installer les dépendances
+STOCKDELABY est une application web complète de gestion de stock spécialement conçue pour les laboratoires.
+
+## Fonctionnalités
+
+- Dashboard avec statistiques en temps réel
+- Gestion complète du stock (CRUD)
+- Entrées/Sorties avec mise à jour automatique
+- Gestion des fournisseurs
+- Catégories et types organisés
+- Mode sombre
+- Interface responsive
+
+## Technologies
+
+- Next.js 16.1.1
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- localStorage
+
+## Installation
+
 ```bash
 npm install
-```
-
-### 2. Configurer Supabase
-1. Mettre à jour `.env.local` avec votre clé API Supabase
-2. Exécuter `supabase-schema.sql` dans Supabase Dashboard
-3. Exécuter `supabase-rls.sql` dans Supabase Dashboard
-
-### 3. Lancer l'application
-```bash
 npm run dev
 ```
 
-Ouvrir [http://localhost:3000](http://localhost:3000)
+## Déploiement
 
-## 📚 Documentation
-
-- **[GUIDE-INSTALLATION.md](GUIDE-INSTALLATION.md)** - Guide complet d'installation
-- **[../ARCHITECTURE.md](../ARCHITECTURE.md)** - Architecture technique
-- **[../README-COMPLET.md](../README-COMPLET.md)** - Documentation complète
-- **[../PROCHAINES-ETAPES.md](../PROCHAINES-ETAPES.md)** - Prochaines étapes
-
-## 🛠️ Stack Technique
-
-- **Frontend**: Next.js 15 + React 19 + TypeScript
-- **Database**: Supabase (PostgreSQL)
-- **Auth**: Supabase Auth (JWT)
-- **UI**: Tailwind CSS + Shadcn/ui
-- **State**: Zustand + React Query
-- **Charts**: Recharts
-
-## 📁 Structure
-
-```
-stock-management/
-├── app/                    # Pages Next.js (App Router)
-├── components/             # Composants React
-├── lib/
-│   ├── supabase/          # Configuration Supabase
-│   ├── db/                # Queries et mutations
-│   └── utils/             # Utilitaires
-├── types/                 # Types TypeScript
-├── stores/                # Zustand stores
-├── .env.local            # Variables d'environnement (À CONFIGURER!)
-├── middleware.ts         # Middleware auth/routing
-└── supabase-*.sql        # Migrations SQL
+### Vercel
+```bash
+npx vercel
 ```
 
-## ⚠️ Important
+### Netlify
+Glissez-déposez le dossier sur netlify.com
 
-**Avant de lancer l'app, assurez-vous de :**
-1. Avoir mis à jour `.env.local` avec votre clé Supabase
-2. Avoir exécuté les migrations SQL dans Supabase
-3. Avoir installé toutes les dépendances
+## Build Status
 
-## 🔗 Liens Utiles
+✅ TypeScript: Pass
+✅ Production Build: Success
+✅ 13/13 pages generated
 
-- Supabase Dashboard: https://supabase.com/dashboard
-- Next.js Docs: https://nextjs.org/docs
-- Shadcn/ui: https://ui.shadcn.com
+## Auteur
+
+Développé avec Claude Code
