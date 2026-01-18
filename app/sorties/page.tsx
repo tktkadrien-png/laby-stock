@@ -406,7 +406,7 @@ export default function SortiesPage() {
           resetForm();
         }}
         title="➖ Nouvelle Sortie de Stock"
-        size="large"
+        size="lg"
       >
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -604,7 +604,7 @@ export default function SortiesPage() {
             setViewingExit(null);
           }}
           title="📋 Détails de la Sortie"
-          size="medium"
+          size="md"
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">

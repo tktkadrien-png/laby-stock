@@ -329,7 +329,7 @@ export default function FournisseursPage() {
           resetForm();
         }}
         title="➕ Ajouter un Nouveau Fournisseur"
-        size="large"
+        size="lg"
       >
         <form onSubmit={handleAdd}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -427,7 +427,7 @@ export default function FournisseursPage() {
             resetForm();
           }}
           title="✏️ Modifier le Fournisseur"
-          size="large"
+          size="lg"
         >
           <form onSubmit={handleUpdate}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -519,7 +519,7 @@ export default function FournisseursPage() {
             setViewingSupplier(null);
           }}
           title="📋 Détails du Fournisseur"
-          size="medium"
+          size="md"
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">

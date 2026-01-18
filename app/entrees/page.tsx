@@ -375,7 +375,7 @@ export default function EntreesPage() {
           resetForm();
         }}
         title="➕ Nouvelle Entrée de Stock"
-        size="large"
+        size="lg"
       >
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -535,7 +535,7 @@ export default function EntreesPage() {
             setViewingEntry(null);
           }}
           title="📋 Détails de l'Entrée"
-          size="medium"
+          size="md"
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">

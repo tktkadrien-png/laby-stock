@@ -43,8 +43,9 @@ export default function DashboardPage() {
     expiredProducts: 0,
     entriesThisMonth: 0,
     exitsThisMonth: 0,
-    entriesValueThisMonth: 0,
-    exitsValueThisMonth: 0,
+    totalEntriesValue: 0,
+    totalExitsValue: 0,
+    alertsCount: 0,
   });
 
   const [recentEntries, setRecentEntries] = useState<StockEntry[]>([]);
@@ -86,8 +87,8 @@ export default function DashboardPage() {
   const stockTrendValue = stats.entriesThisMonth - stats.exitsThisMonth;
   const stockTrendPercent = stats.totalStock > 0 ? Math.round((stockTrendValue / stats.totalStock) * 100) : 0;
 
-  const valueTrend = stats.entriesValueThisMonth > stats.exitsValueThisMonth ? '+' : '';
-  const valueTrendValue = stats.entriesValueThisMonth - stats.exitsValueThisMonth;
+  const valueTrend = stats.totalEntriesValue > stats.totalExitsValue ? '+' : '';
+  const valueTrendValue = stats.totalEntriesValue - stats.totalExitsValue;
   const valueTrendPercent = stats.totalValue > 0 ? Math.round((valueTrendValue / stats.totalValue) * 100) : 0;
 
   return (
@@ -132,7 +133,7 @@ export default function DashboardPage() {
           title="Stock Faible"
           value={stats.lowStockProducts.toString()}
           icon={AlertTriangle}
-          iconColor="orange"
+          iconColor="amber"
         />
         <StatCard
           title="Péremption Proche"
@@ -397,7 +398,7 @@ export default function DashboardPage() {
               {stats.entriesThisMonth}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Valeur: {formatPrice(stats.entriesValueThisMonth)}
+              Valeur: {formatPrice(stats.totalEntriesValue)}
             </p>
           </div>
 
@@ -410,7 +411,7 @@ export default function DashboardPage() {
               {stats.exitsThisMonth}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Valeur: {formatPrice(stats.exitsValueThisMonth)}
+              Valeur: {formatPrice(stats.totalExitsValue)}
             </p>
           </div>
         </div>

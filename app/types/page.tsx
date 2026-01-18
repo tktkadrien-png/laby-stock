@@ -17,7 +17,6 @@ export default function TypesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     nom: '',
-    description: '',
     code: '',
     categorie_associee: categories[0]?.nom || 'Toutes',
   });
@@ -40,7 +39,6 @@ export default function TypesPage() {
     setEditingId(type.id);
     setFormData({
       nom: type.nom,
-      description: type.description || '',
       code: type.code,
       categorie_associee: type.categorie_associee,
     });
@@ -67,7 +65,6 @@ export default function TypesPage() {
     setEditingId(null);
     setFormData({
       nom: '',
-      description: '',
       code: '',
       categorie_associee: categories[0]?.nom || 'Toutes',
     });
@@ -183,10 +180,8 @@ export default function TypesPage() {
               <TableRow>
                 <TableHead>Type</TableHead>
                 <TableHead>Code</TableHead>
-                <TableHead>Description</TableHead>
                 <TableHead>Catégorie</TableHead>
                 <TableHead>Produits</TableHead>
-                <TableHead>Date Création</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -207,9 +202,6 @@ export default function TypesPage() {
                     <TableCell>
                       <Badge variant="info">{type.code}</Badge>
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                      {type.description}
-                    </TableCell>
                     <TableCell>
                       {category ? (
                         <Badge
@@ -227,9 +219,6 @@ export default function TypesPage() {
                     </TableCell>
                     <TableCell>
                       <span className="font-bold text-blue-600">{productCount}</span>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-                      {new Date(type.created_at).toLocaleDateString('fr-FR')}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -262,7 +251,7 @@ export default function TypesPage() {
         isOpen={showModal}
         onClose={resetForm}
         title={editingId ? '✏️ Modifier le Type' : '➕ Nouveau Type'}
-        size="medium"
+        size="md"
       >
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
@@ -302,20 +291,6 @@ export default function TypesPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Catégorie principale où ce type sera utilisé
               </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
-                placeholder="Description du type..."
-                required
-              />
             </div>
           </div>
 

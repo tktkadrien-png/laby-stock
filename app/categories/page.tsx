@@ -17,7 +17,6 @@ export default function CategoriesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     nom: '',
-    description: '',
     code: '',
     couleur: '#1E40AF',
   });
@@ -40,7 +39,6 @@ export default function CategoriesPage() {
     setEditingId(category.id);
     setFormData({
       nom: category.nom,
-      description: category.description || '',
       code: category.code,
       couleur: category.couleur,
     });
@@ -67,7 +65,6 @@ export default function CategoriesPage() {
     setEditingId(null);
     setFormData({
       nom: '',
-      description: '',
       code: '',
       couleur: '#1E40AF',
     });
@@ -174,8 +171,7 @@ export default function CategoriesPage() {
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{category.nom}</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{category.description}</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">{category.nom}</h3>
 
               <div className="flex items-center justify-between">
                 <Badge
@@ -207,10 +203,8 @@ export default function CategoriesPage() {
               <TableRow>
                 <TableHead>Catégorie</TableHead>
                 <TableHead>Code</TableHead>
-                <TableHead>Description</TableHead>
                 <TableHead>Couleur</TableHead>
                 <TableHead>Produits</TableHead>
-                <TableHead>Date Création</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -241,9 +235,6 @@ export default function CategoriesPage() {
                         {category.code}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                      {category.description}
-                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div
@@ -255,9 +246,6 @@ export default function CategoriesPage() {
                     </TableCell>
                     <TableCell>
                       <span className="font-bold text-blue-600">{productCount}</span>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-                      {new Date(category.created_at).toLocaleDateString('fr-FR')}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -290,7 +278,7 @@ export default function CategoriesPage() {
         isOpen={showModal}
         onClose={resetForm}
         title={editingId ? '✏️ Modifier la Catégorie' : '➕ Nouvelle Catégorie'}
-        size="medium"
+        size="md"
       >
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
@@ -312,20 +300,6 @@ export default function CategoriesPage() {
               placeholder="Ex: REACT"
               maxLength={10}
             />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
-                placeholder="Description de la catégorie..."
-                required
-              />
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
