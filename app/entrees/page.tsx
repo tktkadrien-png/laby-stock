@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import { useData } from '@/contexts/DataContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -8,132 +9,104 @@ import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { ArrowDownToLine, Plus, X, Package, DollarSign, Calendar, Trash2, Eye } from 'lucide-react';
-import {
-  getAllProducts,
-  getAllSuppliers,
-  getAllEntries,
-  createEntry,
-  deleteEntry,
-  type Product,
-  type Supplier,
-  type StockEntry,
-  initializeDatabase,
-} from '@/lib/database/localStorage';
+import { ArrowDownToLine, Plus, Package, DollarSign, Calendar, Trash2, Eye, Loader2 } from 'lucide-react';
 
 export default function EntreesPage() {
   const { formatPrice, formatDate } = useSettings();
+  const {
+    products,
+    suppliers,
+    entrees,
+    isLoading,
+    addEntree,
+    deleteEntree
+  } = useData();
 
-  // State
-  const [entries, setEntries] = useState<StockEntry[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [viewingEntry, setViewingEntry] = useState<StockEntry | null>(null);
+  const [viewingEntry, setViewingEntry] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterPeriod, setFilterPeriod] = useState('all'); // all, today, week, month
+  const [filterPeriod, setFilterPeriod] = useState('all');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     produit_id: '',
     quantite: 0,
-    cartons: 0,
     prix_unitaire: 0,
-    fournisseur_id: '',
-    date_entree: new Date().toISOString().split('T')[0],
-    lot: '',
+    fournisseur: '',
+    date: new Date().toISOString().split('T')[0],
+    numero_lot: '',
     date_peremption: '',
     notes: '',
   });
 
-  // Load data on mount
-  useEffect(() => {
-    initializeDatabase();
-    loadData();
-  }, []);
-
-  const loadData = () => {
-    const allEntries = getAllEntries();
-    const allProducts = getAllProducts();
-    const allSuppliers = getAllSuppliers();
-
-    setEntries(allEntries);
-    setProducts(allProducts);
-    setSuppliers(allSuppliers);
-  };
-
-  // Reset form
   const resetForm = () => {
     setFormData({
       produit_id: '',
       quantite: 0,
-      cartons: 0,
       prix_unitaire: 0,
-      fournisseur_id: '',
-      date_entree: new Date().toISOString().split('T')[0],
-      lot: '',
+      fournisseur: '',
+      date: new Date().toISOString().split('T')[0],
+      numero_lot: '',
       date_peremption: '',
       notes: '',
     });
   };
 
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    const selectedProduct = products.find(p => p.id === formData.produit_id);
-    const selectedSupplier = suppliers.find(s => s.id === formData.fournisseur_id);
+    try {
+      const selectedProduct = products.find(p => p.id === formData.produit_id);
+      const selectedSupplier = suppliers.find(s => s.id === formData.fournisseur);
 
-    if (!selectedProduct) {
-      alert('Veuillez sélectionner un produit');
-      return;
-    }
+      if (!selectedProduct) {
+        alert('Veuillez sélectionner un produit');
+        return;
+      }
 
-    const valeur_totale = formData.quantite * formData.prix_unitaire;
+      const entreeData = {
+        produit_id: formData.produit_id,
+        produit_nom: selectedProduct.nom,
+        quantite: formData.quantite,
+        prix_unitaire: formData.prix_unitaire,
+        fournisseur: selectedSupplier?.nom || formData.fournisseur || 'Non spécifié',
+        date: formData.date,
+        numero_lot: formData.numero_lot,
+        date_peremption: formData.date_peremption || undefined,
+        notes: formData.notes,
+      };
 
-    const entryData = {
-      produit_id: formData.produit_id,
-      produit_nom: selectedProduct.nom,
-      quantite: formData.quantite,
-      cartons: formData.cartons,
-      prix_unitaire: formData.prix_unitaire,
-      valeur_totale,
-      fournisseur_id: formData.fournisseur_id || null,
-      fournisseur_nom: selectedSupplier?.nom || 'Non spécifié',
-      date_entree: formData.date_entree,
-      lot: formData.lot,
-      date_peremption: formData.date_peremption || null,
-      notes: formData.notes,
-    };
-
-    const newEntry = createEntry(entryData);
-
-    if (newEntry) {
-      loadData(); // Reload to get updated product quantities
+      await addEntree(entreeData);
       setShowAddModal(false);
       resetForm();
-      alert('✅ Entrée enregistrée avec succès!\nLe stock du produit a été mis à jour automatiquement.');
+      alert('Entrée enregistrée avec succès! Le stock du produit a été mis à jour.');
+    } catch (error) {
+      console.error('Error adding entry:', error);
+      alert('Erreur lors de l\'enregistrement de l\'entrée');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Handle delete
-  const handleDelete = (id: string, productName: string) => {
-    if (confirm(`⚠️ Supprimer cette entrée de "${productName}"?\n\nATTENTION: Cette action ne peut pas être annulée et n'ajustera PAS le stock du produit.`)) {
-      const success = deleteEntry(id);
-      if (success) {
-        loadData();
-        alert('✅ Entrée supprimée avec succès!');
+  const handleDelete = async (id: string, productName: string) => {
+    if (confirm(`Supprimer cette entrée de "${productName}"?\n\nATTENTION: Cette action ne peut pas être annulée.`)) {
+      try {
+        await deleteEntree(id);
+        alert('Entrée supprimée avec succès!');
+      } catch (error) {
+        console.error('Error deleting entry:', error);
+        alert('Erreur lors de la suppression de l\'entrée');
       }
     }
   };
 
-  // View entry details
-  const handleView = (entry: StockEntry) => {
+  const handleView = (entry: any) => {
     setViewingEntry(entry);
     setShowViewModal(true);
   };
 
-  // Auto-fill price from product
   const handleProductChange = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (product) {
@@ -141,58 +114,62 @@ export default function EntreesPage() {
         ...formData,
         produit_id: productId,
         prix_unitaire: product.prix_unitaire,
-        lot: product.lot,
+        numero_lot: product.lot || '',
       });
     }
   };
 
-  // Filter entries
-  const getFilteredEntries = () => {
-    let filtered = entries;
+  const filteredEntries = useMemo(() => {
+    let filtered = [...entrees];
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(entry =>
         entry.produit_nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.fournisseur_nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.lot.toLowerCase().includes(searchTerm.toLowerCase())
+        (entry.fournisseur?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (entry.numero_lot?.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
-    // Period filter
     if (filterPeriod !== 'all') {
       const now = new Date();
-      const entryDate = (dateStr: string) => new Date(dateStr);
-
       filtered = filtered.filter(entry => {
-        const date = entryDate(entry.date_entree);
+        const date = new Date(entry.date);
         const diffTime = Math.abs(now.getTime() - date.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (filterPeriod === 'today') return diffDays === 0;
+        if (filterPeriod === 'today') return diffDays <= 1;
         if (filterPeriod === 'week') return diffDays <= 7;
         if (filterPeriod === 'month') return diffDays <= 30;
         return true;
       });
     }
 
-    return filtered.sort((a, b) => new Date(b.date_entree).getTime() - new Date(a.date_entree).getTime());
-  };
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [entrees, searchTerm, filterPeriod]);
 
-  const filteredEntries = getFilteredEntries();
+  const stats = useMemo(() => {
+    const now = new Date();
+    return {
+      totalEntries: filteredEntries.length,
+      totalQuantity: filteredEntries.reduce((sum, e) => sum + e.quantite, 0),
+      totalValue: filteredEntries.reduce((sum, e) => sum + (e.quantite * (e.prix_unitaire || 0)), 0),
+      thisMonth: filteredEntries.filter(e => {
+        const entryDate = new Date(e.date);
+        return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
+      }).length,
+    };
+  }, [filteredEntries]);
 
-  // Calculate statistics
-  const stats = {
-    totalEntries: filteredEntries.length,
-    totalQuantity: filteredEntries.reduce((sum, e) => sum + e.quantite, 0),
-    totalValue: filteredEntries.reduce((sum, e) => sum + e.valeur_totale, 0),
-    totalCartons: filteredEntries.reduce((sum, e) => sum + e.cartons, 0),
-    thisMonth: filteredEntries.filter(e => {
-      const entryDate = new Date(e.date_entree);
-      const now = new Date();
-      return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
-    }).length,
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement des entrées...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -235,17 +212,6 @@ export default function EntreesPage() {
         <Card variant="bordered">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Cartons</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.totalCartons}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cartons reçus</p>
-            </div>
-            <div className="text-4xl">📦</div>
-          </div>
-        </Card>
-
-        <Card variant="bordered">
-          <div className="flex items-center justify-between">
-            <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Valeur Totale</p>
               <p className="text-xl font-bold text-amber-600">{formatPrice(stats.totalValue)}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Investissement</p>
@@ -261,7 +227,7 @@ export default function EntreesPage() {
           <div className="flex-1">
             <Input
               type="text"
-              placeholder="🔍 Rechercher par produit, fournisseur ou lot..."
+              placeholder="Rechercher par produit, fournisseur ou lot..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -307,7 +273,6 @@ export default function EntreesPage() {
                   <TableHead>Lot</TableHead>
                   <TableHead>Fournisseur</TableHead>
                   <TableHead>Quantité</TableHead>
-                  <TableHead>Cartons</TableHead>
                   <TableHead>Prix Unit.</TableHead>
                   <TableHead>Valeur Totale</TableHead>
                   <TableHead>Actions</TableHead>
@@ -319,25 +284,22 @@ export default function EntreesPage() {
                     <TableCell className="text-sm text-gray-600 dark:text-gray-400">
                       <div className="flex items-center gap-2">
                         <Calendar size={16} />
-                        {formatDate(entry.date_entree)}
+                        {formatDate(entry.date)}
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold dark:text-white">{entry.produit_nom}</TableCell>
                     <TableCell>
-                      <Badge variant="info">{entry.lot || 'N/A'}</Badge>
+                      <Badge variant="info">{entry.numero_lot || 'N/A'}</Badge>
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">{entry.fournisseur_nom}</TableCell>
+                    <TableCell className="text-gray-600 dark:text-gray-400">{entry.fournisseur || 'N/A'}</TableCell>
                     <TableCell>
                       <span className="text-green-600 font-bold text-lg">+{entry.quantite}</span>
                     </TableCell>
-                    <TableCell>
-                      <span className="text-blue-600 font-semibold">{entry.cartons || 0}</span>
-                    </TableCell>
                     <TableCell className="font-semibold text-amber-700">
-                      {formatPrice(entry.prix_unitaire)}
+                      {formatPrice(entry.prix_unitaire || 0)}
                     </TableCell>
                     <TableCell className="font-bold text-amber-700">
-                      {formatPrice(entry.valeur_totale)}
+                      {formatPrice(entry.quantite * (entry.prix_unitaire || 0))}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -374,7 +336,7 @@ export default function EntreesPage() {
           setShowAddModal(false);
           resetForm();
         }}
-        title="➕ Nouvelle Entrée de Stock"
+        title="Nouvelle Entrée de Stock"
         size="lg"
       >
         <form onSubmit={handleSubmit}>
@@ -393,13 +355,12 @@ export default function EntreesPage() {
                 <option value="">-- Sélectionner un produit --</option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>
-                    {product.nom} - {product.code} (Stock actuel: {product.quantite_totale})
+                    {product.nom} - {product.reference || 'N/A'} (Stock actuel: {product.quantite_totale})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Quantity */}
             <Input
               label="Quantité (pièces)"
               type="number"
@@ -409,16 +370,6 @@ export default function EntreesPage() {
               required
             />
 
-            {/* Cartons */}
-            <Input
-              label="Nombre de cartons"
-              type="number"
-              value={formData.cartons}
-              onChange={(e) => setFormData({ ...formData, cartons: parseInt(e.target.value) || 0 })}
-              min="0"
-            />
-
-            {/* Unit Price */}
             <Input
               label="Prix unitaire"
               type="number"
@@ -429,14 +380,13 @@ export default function EntreesPage() {
               required
             />
 
-            {/* Supplier */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Fournisseur
               </label>
               <select
-                value={formData.fournisseur_id}
-                onChange={(e) => setFormData({ ...formData, fournisseur_id: e.target.value })}
+                value={formData.fournisseur}
+                onChange={(e) => setFormData({ ...formData, fournisseur: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
               >
                 <option value="">-- Non spécifié --</option>
@@ -448,25 +398,22 @@ export default function EntreesPage() {
               </select>
             </div>
 
-            {/* Entry Date */}
             <Input
               label="Date d'entrée"
               type="date"
-              value={formData.date_entree}
-              onChange={(e) => setFormData({ ...formData, date_entree: e.target.value })}
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               required
             />
 
-            {/* Lot Number */}
             <Input
               label="Numéro de lot"
               type="text"
-              value={formData.lot}
-              onChange={(e) => setFormData({ ...formData, lot: e.target.value })}
+              value={formData.numero_lot}
+              onChange={(e) => setFormData({ ...formData, numero_lot: e.target.value })}
               placeholder="Ex: LOT-2026-001"
             />
 
-            {/* Expiration Date */}
             <Input
               label="Date de péremption"
               type="date"
@@ -474,7 +421,6 @@ export default function EntreesPage() {
               onChange={(e) => setFormData({ ...formData, date_peremption: e.target.value })}
             />
 
-            {/* Notes */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Notes / Commentaires
@@ -498,12 +444,6 @@ export default function EntreesPage() {
                   {formatPrice(formData.quantite * formData.prix_unitaire)}
                 </p>
               </div>
-              {formData.cartons > 0 && (
-                <div className="text-right">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Cartons</p>
-                  <p className="text-xl font-bold text-blue-600">{formData.cartons}</p>
-                </div>
-              )}
             </div>
           </div>
 
@@ -519,8 +459,8 @@ export default function EntreesPage() {
             >
               Annuler
             </Button>
-            <Button type="submit" variant="primary">
-              ✅ Enregistrer l'Entrée
+            <Button type="submit" variant="primary" isLoading={isSubmitting}>
+              Enregistrer l'Entrée
             </Button>
           </div>
         </form>
@@ -534,18 +474,18 @@ export default function EntreesPage() {
             setShowViewModal(false);
             setViewingEntry(null);
           }}
-          title="📋 Détails de l'Entrée"
+          title="Détails de l'Entrée"
           size="md"
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Date d'entrée</p>
-                <p className="font-semibold dark:text-white">{formatDate(viewingEntry.date_entree)}</p>
+                <p className="font-semibold dark:text-white">{formatDate(viewingEntry.date)}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Numéro de lot</p>
-                <p className="font-semibold dark:text-white">{viewingEntry.lot || 'N/A'}</p>
+                <p className="font-semibold dark:text-white">{viewingEntry.numero_lot || 'N/A'}</p>
               </div>
               <div className="col-span-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Produit</p>
@@ -553,19 +493,15 @@ export default function EntreesPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Fournisseur</p>
-                <p className="font-semibold dark:text-white">{viewingEntry.fournisseur_nom}</p>
+                <p className="font-semibold dark:text-white">{viewingEntry.fournisseur || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Quantité ajoutée</p>
                 <p className="font-bold text-green-600 text-xl">+{viewingEntry.quantite}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Cartons</p>
-                <p className="font-semibold text-blue-600">{viewingEntry.cartons || 0}</p>
-              </div>
-              <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Prix unitaire</p>
-                <p className="font-semibold text-amber-700">{formatPrice(viewingEntry.prix_unitaire)}</p>
+                <p className="font-semibold text-amber-700">{formatPrice(viewingEntry.prix_unitaire || 0)}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Date de péremption</p>
@@ -575,7 +511,9 @@ export default function EntreesPage() {
               </div>
               <div className="col-span-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Valeur totale</p>
-                <p className="font-bold text-amber-700 text-2xl">{formatPrice(viewingEntry.valeur_totale)}</p>
+                <p className="font-bold text-amber-700 text-2xl">
+                  {formatPrice(viewingEntry.quantite * (viewingEntry.prix_unitaire || 0))}
+                </p>
               </div>
               {viewingEntry.notes && (
                 <div className="col-span-2">
@@ -585,7 +523,9 @@ export default function EntreesPage() {
               )}
               <div className="col-span-2">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Enregistré le</p>
-                <p className="text-sm dark:text-white">{new Date(viewingEntry.created_at).toLocaleString('fr-FR')}</p>
+                <p className="text-sm dark:text-white">
+                  {viewingEntry.created_at ? new Date(viewingEntry.created_at).toLocaleString('fr-FR') : 'N/A'}
+                </p>
               </div>
             </div>
           </div>

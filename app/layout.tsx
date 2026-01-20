@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
@@ -8,10 +7,6 @@ import { DataProvider } from "@/contexts/DataContext";
 import { AlertProvider } from "@/contexts/AlertContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import AlertPopup from "@/components/alerts/AlertPopup";
-
-const inter = Inter({
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "LABY STOCK - Gestion de Stock Professionnel",
@@ -25,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body className={`${inter.className} antialiased bg-gray-50 dark:bg-gray-900`}>
+      <body className="font-sans antialiased bg-gray-50 dark:bg-gray-900">
         <ThemeProvider>
           <SettingsProvider>
             <DataProvider>

@@ -1,48 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import { useData } from '@/contexts/DataContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, Package, Calendar, FileSpreadsheet } from 'lucide-react';
-
-interface Product {
-  id: string;
-  nom: string;
-  quantite_totale: number;
-  prix_unitaire: number;
-  unite: string;
-  categorie: string;
-  fournisseur: string;
-  date_peremption?: string;
-}
-
-interface Transaction {
-  id: string;
-  produit_id: string;
-  produit_nom: string;
-  quantite: number;
-  type: 'entree' | 'sortie';
-  date: string;
-  prix_unitaire?: number;
-}
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, Package, Calendar, FileSpreadsheet, Loader2 } from 'lucide-react';
 
 export default function RapportsPage() {
+  const { products, entrees, sorties, isLoading } = useData();
+  const { formatPrice } = useSettings();
   const [selectedPeriod, setSelectedPeriod] = useState('month');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [entrees, setEntrees] = useState<Transaction[]>([]);
-  const [sorties, setSorties] = useState<Transaction[]>([]);
-
-  // Load data from localStorage
-  useEffect(() => {
-    const storedProducts = localStorage.getItem('labystockpro-products');
-    const storedEntrees = localStorage.getItem('labystockpro-entrees');
-    const storedSorties = localStorage.getItem('labystockpro-sorties');
-
-    if (storedProducts) setProducts(JSON.parse(storedProducts));
-    if (storedEntrees) setEntrees(JSON.parse(storedEntrees));
-    if (storedSorties) setSorties(JSON.parse(storedSorties));
-  }, []);
 
   // Filter transactions by period
   const filterByPeriod = (date: string) => {
@@ -67,18 +36,11 @@ export default function RapportsPage() {
     }
   };
 
-  const filteredEntrees = entrees.filter(e => filterByPeriod(e.date));
-  const filteredSorties = sorties.filter(s => filterByPeriod(s.date));
-
-  const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
-    }).format(price) + ' FCFA';
-  };
+  const filteredEntrees = useMemo(() => entrees.filter(e => filterByPeriod(e.date)), [entrees, selectedPeriod]);
+  const filteredSorties = useMemo(() => sorties.filter(s => filterByPeriod(s.date)), [sorties, selectedPeriod]);
 
   // Calculate statistics
-  const rapportData = {
+  const rapportData = useMemo(() => ({
     entrees: {
       total: filteredEntrees.reduce((sum, e) => sum + e.quantite, 0),
       valeur: filteredEntrees.reduce((sum, e) => sum + (e.quantite * (e.prix_unitaire || 0)), 0),
@@ -97,36 +59,44 @@ export default function RapportsPage() {
       produits_actifs: products.length,
       alertes: products.filter(p => p.quantite_totale <= 10).length,
     },
-  };
+  }), [filteredEntrees, filteredSorties, products]);
 
   // Top products by usage
-  const topProduits = [...sorties]
-    .filter(s => filterByPeriod(s.date))
-    .reduce((acc: { [key: string]: { nom: string; quantite: number; valeur: number } }, s) => {
-      const product = products.find(p => p.id === s.produit_id);
-      if (!acc[s.produit_id]) {
-        acc[s.produit_id] = { nom: s.produit_nom, quantite: 0, valeur: 0 };
-      }
-      acc[s.produit_id].quantite += s.quantite;
-      acc[s.produit_id].valeur += s.quantite * (product?.prix_unitaire || 0);
-      return acc;
-    }, {});
+  const topProduitsArray = useMemo(() => {
+    const topProduits = filteredSorties
+      .reduce((acc: { [key: string]: { nom: string; quantite: number; valeur: number } }, s) => {
+        const product = products.find(p => p.id === s.produit_id);
+        if (!acc[s.produit_id]) {
+          acc[s.produit_id] = { nom: s.produit_nom, quantite: 0, valeur: 0 };
+        }
+        acc[s.produit_id].quantite += s.quantite;
+        acc[s.produit_id].valeur += s.quantite * (product?.prix_unitaire || 0);
+        return acc;
+      }, {});
 
-  const topProduitsArray = Object.values(topProduits)
-    .sort((a, b) => b.quantite - a.quantite)
-    .slice(0, 5);
+    return Object.values(topProduits)
+      .sort((a, b) => b.quantite - a.quantite)
+      .slice(0, 5);
+  }, [filteredSorties, products]);
+
+  const getPeriodLabel = () => {
+    switch (selectedPeriod) {
+      case 'week': return 'Cette semaine';
+      case 'month': return 'Ce mois';
+      case 'quarter': return 'Ce trimestre';
+      case 'year': return 'Cette année';
+      default: return 'Toutes les périodes';
+    }
+  };
 
   // Export to Excel (CSV format)
   const handleExportExcel = () => {
-    // Create CSV content
     let csvContent = "data:text/csv;charset=utf-8,";
 
-    // Add report header
     csvContent += "RAPPORT DE STOCK - LABY STOCK\n";
     csvContent += `Période: ${getPeriodLabel()}\n`;
     csvContent += `Date de génération: ${new Date().toLocaleDateString('fr-FR')}\n\n`;
 
-    // Summary section
     csvContent += "=== RÉSUMÉ ===\n";
     csvContent += `Entrées totales,${rapportData.entrees.total}\n`;
     csvContent += `Valeur entrées,${rapportData.entrees.valeur} FCFA\n`;
@@ -135,7 +105,6 @@ export default function RapportsPage() {
     csvContent += `Valeur stock actuel,${rapportData.stock.valeur_totale} FCFA\n`;
     csvContent += `Produits actifs,${rapportData.stock.produits_actifs}\n\n`;
 
-    // Products section
     csvContent += "=== LISTE DES PRODUITS ===\n";
     csvContent += "Nom,Catégorie,Quantité,Unité,Prix Unitaire,Valeur Totale,Fournisseur\n";
     products.forEach(p => {
@@ -154,7 +123,6 @@ export default function RapportsPage() {
       csvContent += `"${s.produit_nom}",${s.quantite},"${new Date(s.date).toLocaleDateString('fr-FR')}"\n`;
     });
 
-    // Download file
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -284,15 +252,16 @@ export default function RapportsPage() {
     };
   };
 
-  const getPeriodLabel = () => {
-    switch (selectedPeriod) {
-      case 'week': return 'Cette semaine';
-      case 'month': return 'Ce mois';
-      case 'quarter': return 'Ce trimestre';
-      case 'year': return 'Cette année';
-      default: return 'Toutes les périodes';
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

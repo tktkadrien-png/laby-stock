@@ -1,38 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { getAllProducts } from '@/lib/database/localStorage';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { Layers, Plus, Edit, Trash2, Package } from 'lucide-react';
+import { Layers, Plus, Edit, Trash2, Package, Loader2 } from 'lucide-react';
 
 export default function CategoriesPage() {
-  const { categories, addCategory, updateCategory, deleteCategory } = useData();
+  const { categories, products, isLoading, addCategory, updateCategory, deleteCategory } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     nom: '',
     code: '',
     couleur: '#1E40AF',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    if (editingId) {
-      updateCategory(editingId, formData);
-      alert('✅ Catégorie mise à jour avec succès!');
-    } else {
-      addCategory(formData);
-      alert('✅ Catégorie ajoutée avec succès!');
+    try {
+      if (editingId) {
+        await updateCategory(editingId, formData);
+        alert('Catégorie mise à jour avec succès!');
+      } else {
+        await addCategory(formData);
+        alert('Catégorie ajoutée avec succès!');
+      }
+      resetForm();
+    } catch (error) {
+      alert('Erreur lors de l\'opération');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    resetForm();
   };
 
   const handleEdit = (category: any) => {
@@ -45,18 +51,21 @@ export default function CategoriesPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string, nom: string) => {
-    const products = getAllProducts();
+  const handleDelete = async (id: string, nom: string) => {
     const categoryProducts = products.filter(p => p.categorie === nom);
 
     if (categoryProducts.length > 0) {
-      alert(`⚠️ Impossible de supprimer cette catégorie!\n\n${categoryProducts.length} produit(s) utilisent encore cette catégorie.`);
+      alert(`Impossible de supprimer cette catégorie!\n\n${categoryProducts.length} produit(s) utilisent encore cette catégorie.`);
       return;
     }
 
-    if (confirm(`⚠️ Supprimer la catégorie "${nom}"?\n\nCette action est irréversible.`)) {
-      deleteCategory(id);
-      alert('✅ Catégorie supprimée avec succès!');
+    if (confirm(`Supprimer la catégorie "${nom}"?\n\nCette action est irréversible.`)) {
+      try {
+        await deleteCategory(id);
+        alert('Catégorie supprimée avec succès!');
+      } catch (error) {
+        alert('Erreur lors de la suppression');
+      }
     }
   };
 
@@ -70,15 +79,16 @@ export default function CategoriesPage() {
     });
   };
 
-  // Calculate product counts per category
+  // Calculate product counts per category using useMemo
   const getProductCount = (categoryName: string) => {
-    const products = getAllProducts();
     return products.filter(p => p.categorie === categoryName).length;
   };
 
-  const totalCategories = categories.length;
-  const totalProduits = getAllProducts().length;
-  const averagePerCategory = totalCategories > 0 ? Math.round(totalProduits / totalCategories) : 0;
+  const stats = useMemo(() => ({
+    totalCategories: categories.length,
+    totalProduits: products.length,
+    averagePerCategory: categories.length > 0 ? Math.round(products.length / categories.length) : 0,
+  }), [categories, products]);
 
   const couleurs = [
     { value: '#EF4444', nom: 'Rouge' },
@@ -91,6 +101,17 @@ export default function CategoriesPage() {
     { value: '#059669', nom: 'Vert Foncé' },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -98,7 +119,7 @@ export default function CategoriesPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Catégories</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {totalCategories} catégorie{totalCategories > 1 ? 's' : ''} · {totalProduits} produit{totalProduits > 1 ? 's' : ''}
+            {stats.totalCategories} catégorie{stats.totalCategories > 1 ? 's' : ''} · {stats.totalProduits} produit{stats.totalProduits > 1 ? 's' : ''}
           </p>
         </div>
         <Button variant="primary" size="lg" onClick={() => setShowModal(true)}>
@@ -113,7 +134,7 @@ export default function CategoriesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Total Catégories</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalCategories}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalCategories}</p>
             </div>
             <Layers size={32} className="text-blue-600" />
           </div>
@@ -123,7 +144,7 @@ export default function CategoriesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Produits Associés</p>
-              <p className="text-2xl font-bold text-blue-600">{totalProduits}</p>
+              <p className="text-2xl font-bold text-blue-600">{stats.totalProduits}</p>
             </div>
             <Package size={32} className="text-blue-600" />
           </div>
@@ -133,7 +154,7 @@ export default function CategoriesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Moyenne par Catégorie</p>
-              <p className="text-2xl font-bold text-amber-600">{averagePerCategory}</p>
+              <p className="text-2xl font-bold text-amber-600">{stats.averagePerCategory}</p>
             </div>
             <div className="text-4xl">📊</div>
           </div>
@@ -277,7 +298,7 @@ export default function CategoriesPage() {
       <Modal
         isOpen={showModal}
         onClose={resetForm}
-        title={editingId ? '✏️ Modifier la Catégorie' : '➕ Nouvelle Catégorie'}
+        title={editingId ? 'Modifier la Catégorie' : 'Nouvelle Catégorie'}
         size="md"
       >
         <form onSubmit={handleSubmit}>
@@ -332,8 +353,8 @@ export default function CategoriesPage() {
             <Button type="button" variant="ghost" onClick={resetForm}>
               Annuler
             </Button>
-            <Button type="submit" variant="primary">
-              {editingId ? '✅ Mettre à jour' : '✅ Créer'}
+            <Button type="submit" variant="primary" isLoading={isSubmitting}>
+              {editingId ? 'Mettre à jour' : 'Créer'}
             </Button>
           </div>
         </form>

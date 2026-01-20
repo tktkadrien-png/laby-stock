@@ -30,59 +30,57 @@ interface AlertContextType {
 const AlertContext = createContext<AlertContextType | undefined>(undefined);
 
 export function AlertProvider({ children }: { children: ReactNode }) {
-  const { categories, types } = useData();
+  const { products, isLoading } = useData();
   const { settings } = useSettings();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [showAlertPopup, setShowAlertPopup] = useState(false);
   const [hasPlayedSound, setHasPlayedSound] = useState(false);
+  const [readAlertIds, setReadAlertIds] = useState<string[]>([]);
 
   // Fonction pour jouer le son de notification
   const playNotificationSound = useCallback(() => {
     if (settings.son_notifications !== false) {
-      // Créer un son de notification avec l'API Web Audio
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
 
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
 
-      // Configuration du son (fréquence et volume)
-      oscillator.frequency.value = 800;
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        oscillator.frequency.value = 800;
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
 
-      // Jouer le son
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.5);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
 
-      // Deuxième bip après un court délai
-      setTimeout(() => {
-        const oscillator2 = audioContext.createOscillator();
-        const gainNode2 = audioContext.createGain();
+        setTimeout(() => {
+          const oscillator2 = audioContext.createOscillator();
+          const gainNode2 = audioContext.createGain();
 
-        oscillator2.connect(gainNode2);
-        gainNode2.connect(audioContext.destination);
+          oscillator2.connect(gainNode2);
+          gainNode2.connect(audioContext.destination);
 
-        oscillator2.frequency.value = 1000;
-        gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+          oscillator2.frequency.value = 1000;
+          gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
+          gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
 
-        oscillator2.start(audioContext.currentTime);
-        oscillator2.stop(audioContext.currentTime + 0.3);
-      }, 200);
+          oscillator2.start(audioContext.currentTime);
+          oscillator2.stop(audioContext.currentTime + 0.3);
+        }, 200);
+      } catch (e) {
+        console.log('Audio notification not supported');
+      }
     }
   }, [settings.son_notifications]);
 
-  // Fonction pour générer les alertes basées sur les produits
+  // Fonction pour générer les alertes basées sur les produits depuis Supabase
   const generateAlerts = useCallback(() => {
     const newAlerts: Alert[] = [];
 
-    // Récupérer les produits depuis localStorage
-    const storedProducts = localStorage.getItem('labystockpro-products');
-    if (!storedProducts) return newAlerts;
+    if (!products || products.length === 0) return newAlerts;
 
-    const products = JSON.parse(storedProducts);
     const today = new Date();
     const seuilStockFaible = settings.seuil_stock_faible || 10;
     const joursAvantPeremption = settings.jours_avant_peremption || 30;
@@ -154,17 +152,11 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     });
 
     return newAlerts;
-  }, [settings.seuil_stock_faible, settings.jours_avant_peremption]);
+  }, [products, settings.seuil_stock_faible, settings.jours_avant_peremption]);
 
   // Fonction pour rafraîchir les alertes
   const refreshAlerts = useCallback(() => {
-    const storedAlerts = localStorage.getItem('labystockpro-alerts');
-    let readAlertIds: string[] = [];
-
-    if (storedAlerts) {
-      const parsedAlerts = JSON.parse(storedAlerts);
-      readAlertIds = parsedAlerts.filter((a: Alert) => a.lu).map((a: Alert) => a.id);
-    }
+    if (isLoading) return;
 
     const newAlerts = generateAlerts();
 
@@ -175,13 +167,14 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     }));
 
     setAlerts(alertsWithReadStatus);
-    localStorage.setItem('labystockpro-alerts', JSON.stringify(alertsWithReadStatus));
-  }, [generateAlerts]);
+  }, [generateAlerts, readAlertIds, isLoading]);
 
-  // Charger les alertes au démarrage
+  // Charger les alertes quand les produits changent
   useEffect(() => {
-    refreshAlerts();
-  }, [refreshAlerts]);
+    if (!isLoading && products.length > 0) {
+      refreshAlerts();
+    }
+  }, [products, isLoading, refreshAlerts]);
 
   // Afficher le popup automatiquement au chargement si il y a des alertes non lues
   useEffect(() => {
@@ -197,25 +190,24 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const interval = setInterval(() => {
       refreshAlerts();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, [refreshAlerts]);
 
   // Marquer une alerte comme lue
   const markAsRead = (id: string) => {
-    const updatedAlerts = alerts.map(alert =>
+    setReadAlertIds(prev => [...prev, id]);
+    setAlerts(prev => prev.map(alert =>
       alert.id === id ? { ...alert, lu: true } : alert
-    );
-    setAlerts(updatedAlerts);
-    localStorage.setItem('labystockpro-alerts', JSON.stringify(updatedAlerts));
+    ));
   };
 
   // Marquer toutes les alertes comme lues
   const markAllAsRead = () => {
-    const updatedAlerts = alerts.map(alert => ({ ...alert, lu: true }));
-    setAlerts(updatedAlerts);
-    localStorage.setItem('labystockpro-alerts', JSON.stringify(updatedAlerts));
+    const allIds = alerts.map(a => a.id);
+    setReadAlertIds(prev => [...new Set([...prev, ...allIds])]);
+    setAlerts(prev => prev.map(alert => ({ ...alert, lu: true })));
   };
 
   const unreadCount = alerts.filter(a => !a.lu).length;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import Card from '@/components/ui/Card';
@@ -9,64 +9,52 @@ import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { Package, Search, Plus, Eye, Edit, Trash2, AlertTriangle } from 'lucide-react';
-import {
-  getAllProducts,
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  getAllSuppliers,
-  type Product,
-  initializeDatabase,
-} from '@/lib/database/localStorage';
+import { Package, Search, Plus, Eye, Edit, Trash2, Loader2 } from 'lucide-react';
 
 export default function StockPage() {
-  const { categories, types } = useData();
+  const {
+    categories,
+    types,
+    suppliers,
+    products,
+    isLoading,
+    addProduct,
+    updateProduct,
+    deleteProduct
+  } = useData();
   const { formatPrice } = useSettings();
-  const [products, setProducts] = useState<Product[]>([]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [viewingProduct, setViewingProduct] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const suppliers = getAllSuppliers();
-  const defaultCategory = categories.length > 0 ? categories[0].nom : 'Réactif';
-  const defaultType = types.length > 0 ? types[0].nom : 'Liquide';
+  const defaultCategory = categories.length > 0 ? categories[0].nom : '';
+  const defaultType = types.length > 0 ? types[0].nom : '';
 
   const [formData, setFormData] = useState({
     nom: '',
-    code: '',
+    reference: '',
     categorie: defaultCategory,
     type: defaultType,
-    description: '',
+    notes: '',
     prix_unitaire: 0,
     quantite_totale: 0,
     quantite_cartons: 0,
-    pieces_par_carton: 100,
+    unites_par_carton: 100,
+    unites_libres: 0,
     unite: 'Unité',
-    seuil_minimum: 10,
     date_peremption: '',
     lot: '',
     emplacement: 'Magasin Principal',
-    fournisseur_id: suppliers.length > 0 ? suppliers[0].id : '',
-    image_url: null as string | null,
+    fournisseur: '',
   });
 
-  // Charger les produits au montage
-  useEffect(() => {
-    initializeDatabase();
-    loadProducts();
-  }, []);
-
-  const loadProducts = () => {
-    const allProducts = getAllProducts();
-    setProducts(allProducts);
-  };
-
-  const calculateDaysLeft = (datePeremption: string | null): number | null => {
+  const calculateDaysLeft = (datePeremption: string | undefined): number | null => {
     if (!datePeremption) return null;
     const today = new Date();
     const expiry = new Date(datePeremption);
@@ -82,72 +70,101 @@ export default function StockPage() {
     return <Badge variant="success">OK ({daysLeft}j)</Badge>;
   };
 
-  const getStockBadge = (product: Product) => {
+  const getStockBadge = (product: any) => {
     if (product.quantite_totale === 0) return <Badge variant="danger">Rupture</Badge>;
-    if (product.quantite_totale <= product.seuil_minimum) return <Badge variant="warning">Stock faible</Badge>;
+    if (product.quantite_totale <= 10) return <Badge variant="warning">Stock faible</Badge>;
     return <Badge variant="success">Disponible</Badge>;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    // Générer un code unique si pas fourni
-    const code = formData.code || `PRD-${Date.now().toString().slice(-6)}`;
+    try {
+      const productData = {
+        nom: formData.nom,
+        reference: formData.reference || `PRD-${Date.now().toString().slice(-6)}`,
+        categorie: formData.categorie,
+        type: formData.type,
+        fournisseur: formData.fournisseur,
+        quantite_totale: formData.quantite_totale,
+        quantite_cartons: formData.quantite_cartons,
+        unites_par_carton: formData.unites_par_carton,
+        unites_libres: formData.unites_libres,
+        prix_unitaire: formData.prix_unitaire,
+        unite: formData.unite,
+        emplacement: formData.emplacement,
+        date_peremption: formData.date_peremption || undefined,
+        lot: formData.lot,
+        notes: formData.notes,
+      };
 
-    const newProduct = createProduct({
-      ...formData,
-      code,
-    });
-
-    setProducts([...products, newProduct]);
-    setShowAddModal(false);
-    resetForm();
+      await addProduct(productData);
+      setShowAddModal(false);
+      resetForm();
+      alert('Produit ajouté avec succès!');
+    } catch (error) {
+      console.error('Error adding product:', error);
+      alert('Erreur lors de l\'ajout du produit');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleEdit = (product: Product) => {
+  const handleEdit = (product: any) => {
     setEditingProduct(product);
     setFormData({
       nom: product.nom,
-      code: product.code,
+      reference: product.reference || '',
       categorie: product.categorie,
       type: product.type,
-      description: product.description,
+      notes: product.notes || '',
       prix_unitaire: product.prix_unitaire,
       quantite_totale: product.quantite_totale,
       quantite_cartons: product.quantite_cartons,
-      pieces_par_carton: product.pieces_par_carton,
+      unites_par_carton: product.unites_par_carton,
+      unites_libres: product.unites_libres,
       unite: product.unite,
-      seuil_minimum: product.seuil_minimum,
       date_peremption: product.date_peremption || '',
-      lot: product.lot,
-      emplacement: product.emplacement,
-      fournisseur_id: product.fournisseur_id || '',
-      image_url: product.image_url,
+      lot: product.lot || '',
+      emplacement: product.emplacement || '',
+      fournisseur: product.fournisseur || '',
     });
     setShowEditModal(true);
   };
 
-  const handleUpdate = (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
+    setIsSubmitting(true);
 
-    const updated = updateProduct(editingProduct.id, formData);
-    if (updated) {
-      loadProducts();
+    try {
+      await updateProduct(editingProduct.id, formData);
       setShowEditModal(false);
       setEditingProduct(null);
       resetForm();
+      alert('Produit mis à jour avec succès!');
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert('Erreur lors de la mise à jour du produit');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer ce produit ? Cette action est irréversible.')) {
-      deleteProduct(id);
-      loadProducts();
+      try {
+        await deleteProduct(id);
+        alert('Produit supprimé avec succès!');
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Erreur lors de la suppression du produit');
+      }
     }
   };
 
-  const handleView = (product: Product) => {
+  const handleView = (product: any) => {
     setViewingProduct(product);
     setShowViewModal(true);
   };
@@ -155,43 +172,55 @@ export default function StockPage() {
   const resetForm = () => {
     setFormData({
       nom: '',
-      code: '',
+      reference: '',
       categorie: defaultCategory,
       type: defaultType,
-      description: '',
+      notes: '',
       prix_unitaire: 0,
       quantite_totale: 0,
       quantite_cartons: 0,
-      pieces_par_carton: 100,
+      unites_par_carton: 100,
+      unites_libres: 0,
       unite: 'Unité',
-      seuil_minimum: 10,
       date_peremption: '',
       lot: '',
       emplacement: 'Magasin Principal',
-      fournisseur_id: suppliers.length > 0 ? suppliers[0].id : '',
-      image_url: null,
+      fournisseur: '',
     });
   };
 
-  const filteredProducts = products.filter(item => {
-    const matchesSearch = item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.lot.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || item.categorie === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter(item => {
+      const matchesSearch = item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (item.reference?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           (item.lot?.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesCategory = selectedCategory === 'all' || item.categorie === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, searchTerm, selectedCategory]);
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: products.length,
     totalStock: products.reduce((sum, p) => sum + p.quantite_totale, 0),
     totalValue: products.reduce((sum, p) => sum + (p.quantite_totale * p.prix_unitaire), 0),
-    lowStock: products.filter(p => p.quantite_totale <= p.seuil_minimum && p.quantite_totale > 0).length,
+    lowStock: products.filter(p => p.quantite_totale <= 10 && p.quantite_totale > 0).length,
     outOfStock: products.filter(p => p.quantite_totale === 0).length,
     expiringSoon: products.filter(p => {
       const days = calculateDaysLeft(p.date_peremption);
       return days !== null && days <= 30 && days >= 0;
     }).length,
-  };
+  }), [products]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement des produits...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -300,21 +329,20 @@ export default function StockPage() {
             <TableBody>
               {filteredProducts.map((product) => {
                 const daysLeft = calculateDaysLeft(product.date_peremption);
-                const fournisseur = suppliers.find(s => s.id === product.fournisseur_id);
 
                 return (
                   <TableRow key={product.id}>
                     <TableCell>
                       <span className="font-mono text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {product.code}
+                        {product.reference || 'N/A'}
                       </span>
                     </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-semibold text-gray-900 dark:text-white">{product.nom}</div>
-                        {product.description && (
+                        {product.notes && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">
-                            {product.description}
+                            {product.notes}
                           </div>
                         )}
                       </div>
@@ -330,7 +358,7 @@ export default function StockPage() {
                         <div className="text-xs text-gray-500 dark:text-gray-400">{product.unite}</div>
                         {product.quantite_cartons > 0 && (
                           <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                            📦 {product.quantite_cartons} cartons
+                            {product.quantite_cartons} cartons
                           </div>
                         )}
                       </div>
@@ -422,8 +450,8 @@ export default function StockPage() {
             <Input
               label="Code produit"
               type="text"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+              value={formData.reference}
+              onChange={(e) => setFormData({ ...formData, reference: e.target.value.toUpperCase() })}
               placeholder="Généré automatiquement"
             />
 
@@ -437,6 +465,7 @@ export default function StockPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
                 required
               >
+                <option value="">Sélectionner une catégorie</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.nom}>{cat.nom}</option>
                 ))}
@@ -453,6 +482,7 @@ export default function StockPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
                 required
               >
+                <option value="">Sélectionner un type</option>
                 {types.map((type) => (
                   <option key={type.id} value={type.nom}>{type.nom}</option>
                 ))}
@@ -464,13 +494,13 @@ export default function StockPage() {
                 Fournisseur
               </label>
               <select
-                value={formData.fournisseur_id}
-                onChange={(e) => setFormData({ ...formData, fournisseur_id: e.target.value })}
+                value={formData.fournisseur}
+                onChange={(e) => setFormData({ ...formData, fournisseur: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
               >
                 <option value="">Aucun</option>
                 {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>{supplier.nom}</option>
+                  <option key={supplier.id} value={supplier.nom}>{supplier.nom}</option>
                 ))}
               </select>
             </div>
@@ -503,14 +533,6 @@ export default function StockPage() {
             />
 
             <Input
-              label="Seuil minimum"
-              type="number"
-              value={formData.seuil_minimum}
-              onChange={(e) => setFormData({ ...formData, seuil_minimum: parseInt(e.target.value) || 10 })}
-              min="0"
-            />
-
-            <Input
               label="Date de péremption"
               type="date"
               value={formData.date_peremption}
@@ -536,11 +558,11 @@ export default function StockPage() {
 
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
+              Notes
             </label>
             <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-800"
               placeholder="Description optionnelle du produit..."
@@ -559,10 +581,10 @@ export default function StockPage() {
                 min="0"
               />
               <Input
-                label="Pièces par carton"
+                label="Unités par carton"
                 type="number"
-                value={formData.pieces_par_carton}
-                onChange={(e) => setFormData({ ...formData, pieces_par_carton: parseInt(e.target.value) || 100 })}
+                value={formData.unites_par_carton}
+                onChange={(e) => setFormData({ ...formData, unites_par_carton: parseInt(e.target.value) || 100 })}
                 min="1"
               />
             </div>
@@ -595,7 +617,7 @@ export default function StockPage() {
             >
               Annuler
             </Button>
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" isLoading={isSubmitting}>
               {editingProduct ? 'Mettre à jour' : 'Ajouter le Produit'}
             </Button>
           </div>
@@ -617,7 +639,7 @@ export default function StockPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Code</p>
-                <p className="font-mono font-bold text-gray-900 dark:text-white">{viewingProduct.code}</p>
+                <p className="font-mono font-bold text-gray-900 dark:text-white">{viewingProduct.reference || 'N/A'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Nom</p>
@@ -649,10 +671,6 @@ export default function StockPage() {
                   {formatPrice(viewingProduct.quantite_totale * viewingProduct.prix_unitaire)}
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Seuil Minimum</p>
-                <p className="font-semibold text-gray-900 dark:text-white">{viewingProduct.seuil_minimum}</p>
-              </div>
               {viewingProduct.date_peremption && (
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Date de Péremption</p>
@@ -670,7 +688,7 @@ export default function StockPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Emplacement</p>
-                <p className="font-semibold text-gray-900 dark:text-white">{viewingProduct.emplacement}</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{viewingProduct.emplacement || '-'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Statut</p>
@@ -678,10 +696,10 @@ export default function StockPage() {
               </div>
             </div>
 
-            {viewingProduct.description && (
+            {viewingProduct.notes && (
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Description</p>
-                <p className="text-gray-900 dark:text-white">{viewingProduct.description}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Notes</p>
+                <p className="text-gray-900 dark:text-white">{viewingProduct.notes}</p>
               </div>
             )}
 
@@ -694,16 +712,16 @@ export default function StockPage() {
                     <span className="ml-2 font-bold">{viewingProduct.quantite_cartons}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600 dark:text-gray-400">Pièces/carton:</span>
-                    <span className="ml-2 font-bold">{viewingProduct.pieces_par_carton}</span>
+                    <span className="text-gray-600 dark:text-gray-400">Unités/carton:</span>
+                    <span className="ml-2 font-bold">{viewingProduct.unites_par_carton}</span>
                   </div>
                 </div>
               </div>
             )}
 
             <div className="text-xs text-gray-500 dark:text-gray-400 border-t dark:border-gray-700 pt-3 mt-3">
-              <p>Créé le: {new Date(viewingProduct.created_at).toLocaleString('fr-FR')}</p>
-              <p>Mis à jour: {new Date(viewingProduct.updated_at).toLocaleString('fr-FR')}</p>
+              <p>Créé le: {viewingProduct.created_at ? new Date(viewingProduct.created_at).toLocaleString('fr-FR') : 'N/A'}</p>
+              <p>Mis à jour: {viewingProduct.updated_at ? new Date(viewingProduct.updated_at).toLocaleString('fr-FR') : 'N/A'}</p>
             </div>
           </div>
 

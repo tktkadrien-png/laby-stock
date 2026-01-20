@@ -1,38 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { getAllProducts } from '@/lib/database/localStorage';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { Tag, Plus, Edit, Trash2, Package } from 'lucide-react';
+import { Tag, Plus, Edit, Trash2, Package, Loader2 } from 'lucide-react';
 
 export default function TypesPage() {
-  const { types, categories, addType, updateType, deleteType } = useData();
+  const { types, categories, products, isLoading, addType, updateType, deleteType } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     nom: '',
     code: '',
     categorie_associee: categories[0]?.nom || 'Toutes',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    if (editingId) {
-      updateType(editingId, formData);
-      alert('✅ Type mis à jour avec succès!');
-    } else {
-      addType(formData);
-      alert('✅ Type ajouté avec succès!');
+    try {
+      if (editingId) {
+        await updateType(editingId, formData);
+        alert('Type mis à jour avec succès!');
+      } else {
+        await addType(formData);
+        alert('Type ajouté avec succès!');
+      }
+      resetForm();
+    } catch (error) {
+      alert('Erreur lors de l\'opération');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    resetForm();
   };
 
   const handleEdit = (type: any) => {
@@ -45,18 +51,21 @@ export default function TypesPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string, nom: string) => {
-    const products = getAllProducts();
+  const handleDelete = async (id: string, nom: string) => {
     const typeProducts = products.filter(p => p.type === nom);
 
     if (typeProducts.length > 0) {
-      alert(`⚠️ Impossible de supprimer ce type!\n\n${typeProducts.length} produit(s) utilisent encore ce type.`);
+      alert(`Impossible de supprimer ce type!\n\n${typeProducts.length} produit(s) utilisent encore ce type.`);
       return;
     }
 
-    if (confirm(`⚠️ Supprimer le type "${nom}"?\n\nCette action est irréversible.`)) {
-      deleteType(id);
-      alert('✅ Type supprimé avec succès!');
+    if (confirm(`Supprimer le type "${nom}"?\n\nCette action est irréversible.`)) {
+      try {
+        await deleteType(id);
+        alert('Type supprimé avec succès!');
+      } catch (error) {
+        alert('Erreur lors de la suppression');
+      }
     }
   };
 
@@ -72,22 +81,38 @@ export default function TypesPage() {
 
   // Calculate product counts per type
   const getProductCount = (typeName: string) => {
-    const products = getAllProducts();
     return products.filter(p => p.type === typeName).length;
   };
 
-  const totalTypes = types.length;
-  const totalProduits = getAllProducts().length;
-  const averagePerType = totalTypes > 0 ? Math.round(totalProduits / totalTypes) : 0;
+  const stats = useMemo(() => ({
+    totalTypes: types.length,
+    totalProduits: products.length,
+    averagePerType: types.length > 0 ? Math.round(products.length / types.length) : 0,
+  }), [types, products]);
 
   // Group by category
-  const typesByCategory = categories.map(cat => ({
-    categorie: cat.nom,
-    count: types.filter(t => t.categorie_associee === cat.nom).length,
-    color: cat.couleur,
-  }));
+  const typesByCategory = useMemo(() => {
+    return categories.map(cat => ({
+      categorie: cat.nom,
+      count: types.filter(t => t.categorie_associee === cat.nom).length,
+      color: cat.couleur,
+    }));
+  }, [categories, types]);
 
-  const activeCategories = typesByCategory.filter(c => c.count > 0).length;
+  const activeCategories = useMemo(() => {
+    return typesByCategory.filter(c => c.count > 0).length;
+  }, [typesByCategory]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -96,7 +121,7 @@ export default function TypesPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Types</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {totalTypes} type{totalTypes > 1 ? 's' : ''} · {totalProduits} produit{totalProduits > 1 ? 's' : ''}
+            {stats.totalTypes} type{stats.totalTypes > 1 ? 's' : ''} · {stats.totalProduits} produit{stats.totalProduits > 1 ? 's' : ''}
           </p>
         </div>
         <Button variant="primary" size="lg" onClick={() => setShowModal(true)}>
@@ -111,7 +136,7 @@ export default function TypesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Total Types</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalTypes}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalTypes}</p>
             </div>
             <Tag size={32} className="text-blue-600" />
           </div>
@@ -121,7 +146,7 @@ export default function TypesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Produits Associés</p>
-              <p className="text-2xl font-bold text-blue-600">{totalProduits}</p>
+              <p className="text-2xl font-bold text-blue-600">{stats.totalProduits}</p>
             </div>
             <Package size={32} className="text-blue-600" />
           </div>
@@ -141,7 +166,7 @@ export default function TypesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Moyenne par Type</p>
-              <p className="text-2xl font-bold text-amber-600">{averagePerType}</p>
+              <p className="text-2xl font-bold text-amber-600">{stats.averagePerType}</p>
             </div>
             <div className="text-4xl">📊</div>
           </div>
@@ -250,7 +275,7 @@ export default function TypesPage() {
       <Modal
         isOpen={showModal}
         onClose={resetForm}
-        title={editingId ? '✏️ Modifier le Type' : '➕ Nouveau Type'}
+        title={editingId ? 'Modifier le Type' : 'Nouveau Type'}
         size="md"
       >
         <form onSubmit={handleSubmit}>
@@ -298,8 +323,8 @@ export default function TypesPage() {
             <Button type="button" variant="ghost" onClick={resetForm}>
               Annuler
             </Button>
-            <Button type="submit" variant="primary">
-              {editingId ? '✅ Mettre à jour' : '✅ Créer'}
+            <Button type="submit" variant="primary" isLoading={isSubmitting}>
+              {editingId ? 'Mettre à jour' : 'Créer'}
             </Button>
           </div>
         </form>
